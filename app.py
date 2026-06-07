@@ -1,32 +1,19 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import requests
+from anthropic import Anthropic
 import os
 
 app = Flask(__name__)
 
-# Allow Hackingtons
 CORS(app, origins=["https://www.hackingtons.io"])
 
-HF_TOKEN = os.environ["HF_API_KEY"]
-
-API_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2"
-
-headers = {
-    "Authorization": f"Bearer {HF_TOKEN}"
-}
+client = Anthropic(
+    api_key=os.environ["ANTHROPIC_API_KEY"]
+)
 
 @app.route("/")
 def home():
     return "Backend is running!"
-
-@app.route("/test")
-def test():
-    try:
-        r = requests.get("https://huggingface.co", timeout=10)
-        return f"Hugging Face reachable. Status: {r.status_code}"
-    except Exception as e:
-        return f"Error: {str(e)}", 500
 
 @app.route("/chat", methods=["POST", "OPTIONS"])
 def chat():
@@ -42,27 +29,18 @@ def chat():
 
         user_message = data["message"]
 
-        payload = {
-            "inputs": user_message,
-            "parameters": {
-                "max_new_tokens": 200,
-                "temperature": 0.7
-            }
-        }
-
-        response = requests.post(
-            API_URL,
-            headers=headers,
-            json=payload,
-            timeout=60
+        response = client.messages.create(
+            model="claude-sonnet-4-0",
+            max_tokens=300,
+            messages=[
+                {
+                    "role": "user",
+                    "content": user_message
+                }
+            ]
         )
 
-        result = response.json()
-
-        if isinstance(result, list):
-            reply = result[0].get("generated_text", "No text returned")
-        else:
-            reply = str(result)
+        reply = response.content[0].text
 
         return jsonify({
             "response": reply
@@ -72,7 +50,6 @@ def chat():
         return jsonify({
             "error": str(e)
         }), 500
-
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
