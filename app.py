@@ -5,6 +5,7 @@ import os
 
 app = Flask(__name__)
 
+# Allow Hackingtons
 CORS(app, origins=["https://www.hackingtons.io"])
 
 HF_TOKEN = os.environ["HF_API_KEY"]
@@ -15,9 +16,17 @@ headers = {
     "Authorization": f"Bearer {HF_TOKEN}"
 }
 
-@app.route("/", methods=["GET"])
+@app.route("/")
 def home():
     return "Backend is running!"
+
+@app.route("/test")
+def test():
+    try:
+        r = requests.get("https://huggingface.co", timeout=10)
+        return f"Hugging Face reachable. Status: {r.status_code}"
+    except Exception as e:
+        return f"Error: {str(e)}", 500
 
 @app.route("/chat", methods=["POST", "OPTIONS"])
 def chat():
@@ -27,6 +36,10 @@ def chat():
 
     try:
         data = request.get_json()
+
+        if not data or "message" not in data:
+            return jsonify({"error": "Missing message"}), 400
+
         user_message = data["message"]
 
         payload = {
@@ -37,15 +50,19 @@ def chat():
             }
         }
 
-        response = requests.post(API_URL, headers=headers, json=payload)
+        response = requests.post(
+            API_URL,
+            headers=headers,
+            json=payload,
+            timeout=60
+        )
 
         result = response.json()
 
-        # Hugging Face returns different formats sometimes
         if isinstance(result, list):
-            reply = result[0]["generated_text"]
+            reply = result[0].get("generated_text", "No text returned")
         else:
-            reply = result.get("error", "No response")
+            reply = str(result)
 
         return jsonify({
             "response": reply
